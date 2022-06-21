@@ -8,12 +8,6 @@ const commandRegEx = /(m|l|c|q|z|a|v|h|s|z)(?: ?)([\d+-., ]*)/ig
 const argumentsRegEx = /([-]?\d+\.*\d*)(?:,| )?/g
 const transformRegEx = /(matrix|translate|scale|rotate|skewX|skewY)(?:\()(.*)(?:\))/
 
-const _config = {
-    minDistance: 0.5,
-    roundToNearest: 0.25,
-    sampleFrequency: 0.001,
-  }
-
 function parseArguments(source) {
     const args = []
     let arg
@@ -24,7 +18,39 @@ function parseArguments(source) {
     return args
 }
 
-function processSVG(data) {
+/**
+ * minDistance is the minimum distance between the
+ * current and previous points when sampling.
+ * If a sample results in a distance less than the
+ * specified value, the point is discarded.
+ *
+ * @var {number} minDistance
+ * @memberOf SVGPathInterpolator#
+ * @default 0.5
+ */
+
+/**
+ * roundToNearest is useful when snapping to fractional
+ * pixel values. For example, if roundToNearest is .25,
+ * a sample resulting in the point 2.343200092,4.6100923
+ * will round to 2.25,4.5.
+ *
+ * @var {number} roundToNearest
+ * @memberOf SVGPathInterpolator#
+ * @default 0.25
+ */
+
+/**
+ * sampleFrequency determines the increment of t when sampling.
+ * If sampleFrequency is set to .001 , since t iterates from
+ * 0 to 1, there will be 1000 points sampled per command
+ * but only points that are greater than minDistance are captured.
+ *
+ * @var {number} sampleFrequency
+ * @memberOf SVGPathInterpolator#
+ * @default 0.001
+ */
+export function processSvg(data, minDistance=0.5, roundToNearest=0.25, sampleFrequency=0.001) {
     const openTagsDepth = {}
     const transforms = {}
     const interpolatedPaths = []
@@ -40,8 +66,8 @@ function processSVG(data) {
         }
 
         if (node.name === 'path') {
-            const points = interpolatePath(node.attributes.d)
-            applyTransforms(transforms, points)
+            const points = interpolatePath(node.attributes.d, minDistance, roundToNearest, sampleFrequency)
+            applyTransforms(transforms, points, roundToNearest)
             interpolatedPaths.push(...points)
         }
     }
@@ -54,7 +80,7 @@ function processSVG(data) {
     return interpolatedPaths
 }
 
-function applyTransforms(transforms, points) {
+function applyTransforms(transforms, points, roundToNearest) {
     const keys = Object.keys(transforms)
     if (!keys.length) {
         return
@@ -72,13 +98,13 @@ function applyTransforms(transforms, points) {
         const len = points.length
         for (let i = 0; i < len; i += 2) {
             const {x, y} = svgTransform.map(points[i], points[i + 1])
-            points[i] = x - (x % _config.roundToNearest)
-            points[i + 1] = y - (y % _config.roundToNearest)
+            points[i] = x - (x % roundToNearest)
+            points[i + 1] = y - (y % roundToNearest)
         }
     })
 }
 
-function interpolatePath(path) {
+function interpolatePath(path, minDistance, roundToNearest, sampleFrequency) {
     const data = []
     let subPathStartX = 0
     let subPathStartY = 0
@@ -189,7 +215,6 @@ function interpolatePath(path) {
         const calculator = calculators[command.toLowerCase()]
         const offsets = {offsetX, offsetY}
         if (calculator) {
-            const {minDistance, roundToNearest, sampleFrequency} = _config
             args.push(minDistance, roundToNearest, sampleFrequency)
             const pts = calculator(...args)
             data.push(...pts)
@@ -239,71 +264,4 @@ function applyOffset(offsetX, offsetY, coords = [], setLength = 2) {
         coords[i] += (i % 2 ? +offsetY : +offsetX)
     }
     return coords
-}
-
-export class SVGPathInterpolator {
-    /**
-     * When trim is true, paths that were translated
-     * are normalized and will begin at 0,0.
-     *
-     * @var {boolean} trim
-     * @memberOf SVGPathInterpolator#
-     * @default false
-     */
-
-    /**
-     * minDistance is the minimum distance between the
-     * current and previous points when sampling.
-     * If a sample results in a distance less than the
-     * specified value, the point is discarded.
-     *
-     * @var {number} minDistance
-     * @memberOf SVGPathInterpolator#
-     * @default 0.5
-     */
-
-    /**
-     * roundToNearest is useful when snapping to fractional
-     * pixel values. For example, if roundToNearest is .25,
-     * a sample resulting in the point 2.343200092,4.6100923
-     * will round to 2.25,4.5.
-     *
-     * @var {number} roundToNearest
-     * @memberOf SVGPathInterpolator#
-     * @default 0.25
-     */
-
-    /**
-     * sampleFrequency determines the increment of t when sampling.
-     * If sampleFrequency is set to .001 , since t iterates from
-     * 0 to 1, there will be 1000 points sampled per command
-     * but only points that are greater than minDistance are captured.
-     *
-     * @var {number} sampleFrequency
-     * @memberOf SVGPathInterpolator#
-     * @default 0.001
-     */
-
-    /**
-     * When true, pretty creates formatted json output.
-     *
-     * @var {boolean} pretty
-     * @memberOf SVGPathInterpolator#
-     * @default false
-     */
-
-    /**
-     * Then number of spaces to indent when pretty is true.
-     *
-     * @var {int} prettyIndent
-     * @memberOf SVGPathInterpolator#
-     * @default 0
-     */
-
-    constructor() {
-    }
-
-    processSvg(svg) {
-        return processSVG(svg)
-    }
 }
